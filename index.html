@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dextax - Геолокация</title>
+
+  <!-- Подключение стилей и скриптов Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Подключение Telegram Web App API -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <style>
+    /* Общие стили для страницы */
+    body, html {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+
+    /* ============================
+       КОНТЕЙНЕР ИНТЕРФЕЙСА (круглая рамка)
+       ============================ */
+    #interfaceFrame {
+      position: relative;
+      width: 90vh;         /* Ширина равна 90% от высоты окна */
+      height: 90vh;        /* Высота равна 90% от высоты окна */
+      margin: 5vh auto;    /* Центрирование по вертикали и горизонтали */
+      border: 5px solid #ddd;
+      border-radius: 50%;  /* Делает рамку круглой */
+      overflow: hidden;    /* Обрезает содержимое по границе круга */
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      background: #fff;
+    }
+
+    /* ============================
+       КАРТА
+       Карта занимает весь контейнер интерфейса.
+       ============================ */
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ============================
+       Надпись Dextax (отображается поверх карты)
+       ============================ */
+    #dextaxLabel {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 32px;
+      font-weight: bold;
+      color: rgba(255, 255, 255, 0.8); /* белый с прозрачностью */
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+      z-index: 1001;
+    }
+
+    /* ============================
+       АВАТАР ПОЛЬЗОВАТЕЛЯ
+       ============================ */
+    #userAvatar {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 50%;  /* Делает изображение круглым */
+      width: 120px;
+      height: 120px;
+      z-index: 1001;
+      border: 3px solid #fff;
+    }
+
+    /* ============================
+       НИКНЕЙМ ПОЛЬЗОВАТЕЛЯ
+       ============================ */
+    #userNickname {
+      position: absolute;
+      top: 200px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+      z-index: 1001;
+      text-shadow: 1px 1px 3px rgba(255,255,255,0.7);
+    }
+
+    /* ============================
+       КОНТЕЙНЕР КНОПОК ("Пассажир" и "Водитель")
+       Располагается внизу интерфейса.
+       ============================ */
+    .button-container {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 20px;
+      z-index: 1001;
+    }
+
+    /* Стили для кнопок */
+    .button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    }
+    .button:hover {
+      background-color: #45a049;
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .button:active {
+      transform: scale(0.95);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* ============================
+       КАСТОМНЫЕ ЗУМ-КНОПКИ (сбоку от интерфейса)
+       ============================ */
+    #zoomControls {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 1001;
+    }
+    .zoom-button {
+      width: 40px;
+      height: 40px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 24px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: background-color 0.3s;
+    }
+    .zoom-button:hover {
+      background-color: #f0f0f0;
+    }
+
+    /* ============================
+       СТИЛИЗАЦИЯ АТРИБУЦИИ КАРТЫ
+       (текст становится прозрачным, если не наведён курсор)
+       ============================ */
+    .leaflet-control-attribution {
+      opacity: 0;
+      transition: opacity 1s;
+      font-size: 10px;
+      color: #555;
+    }
+    .leaflet-control-attribution:hover {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <!-- Круглый контейнер интерфейса -->
+  <div id="interfaceFrame">
+
+    <!-- Карта (будет заполнять весь контейнер) -->
+    <div id="map"></div>
+
+    <!-- Надпись Dextax, накладывающаяся на карту -->
+    <div id="dextaxLabel">Dextax</div>
+
+    <!-- Аватар пользователя -->
+    <img id="userAvatar" alt="User Avatar" />
+
+    <!-- Никнейм пользователя -->
+    <div id="userNickname"></div>
+
+    <!-- Контейнер для кнопок "Пассажир" и "Водитель" -->
+    <div class="button-container">
+      <button class="button">Пассажир</button>
+      <button class="button">Водитель</button>
+    </div>
+
+    <!-- Кастомные зум-кнопки -->
+    <div id="zoomControls">
+      <button id="zoomIn" class="zoom-button">+</button>
+      <button id="zoomOut" class="zoom-button">−</button>
+    </div>
+  </div>
+
+  <script>
+    /* 
+      Функция configureElements
+      Принимает объект конфигурации для настройки параметров UI-элементов:
+        - buttons: стили для кнопок
+        - avatar: стили для аватара пользователя
+        - nickname: стили для никнейма
+        - frame: стили для рамки (интерфейса)
+        - labels: стили для надписи (например, Dextax)
+    */
+    function configureElements(config) {
+      // Настройка кнопок
+      if (config.buttons) {
+        const buttons = document.querySelectorAll('.button');
+        buttons.forEach(btn => {
+          Object.assign(btn.style, config.buttons);
+        });
+      }
+      // Настройка аватара
+      if (config.avatar) {
+        Object.assign(document.getElementById('userAvatar').style, config.avatar);
+      }
+      // Настройка никнейма
+      if (config.nickname) {
+        Object.assign(document.getElementById('userNickname').style, config.nickname);
+      }
+      // Настройка рамки (контейнер интерфейса)
+      if (config.frame) {
+        Object.assign(document.getElementById('interfaceFrame').style, config.frame);
+      }
+      // Настройка надписи Dextax
+      if (config.labels) {
+        Object.assign(document.getElementById('dextaxLabel').style, config.labels);
+      }
+    }
+
+    // Пример конфигурации UI-элементов (эти значения можно менять для настройки внешнего вида)
+    const uiConfig = {
+      buttons: {
+        padding: "12px 24px",
+        fontSize: "16px",
+        borderRadius: "20px",
+        backgroundColor: "#4CAF50"
+      },
+      avatar: {
+        width: "120px",
+        height: "120px",
+        border: "3px solid #fff"
+      },
+      nickname: {
+        fontSize: "20px",
+        color: "#333"
+      },
+      frame: {
+        border: "5px solid #ddd",
+        borderRadius: "50%"
+      },
+      labels: {
+        fontSize: "32px",
+        color: "rgba(255,255,255,0.8)"
+      }
+    };
+
+    // Применяем конфигурацию к UI-элементам
+    configureElements(uiConfig);
+
+    // Флаг, указывающий, что профиль пользователя уже инициализирован
+    let isProfileInitialized = false;
+
+    /* 
+      Функция initUserProfile
+      Инициализирует профиль пользователя, получая данные из Telegram Web App API,
+      устанавливая аватар и никнейм, а также сохраняя профиль в localStorage.
+    */
+    function initUserProfile() {
+      if (isProfileInitialized) return;
+
+      const tgUser = Telegram.WebApp.initDataUnsafe?.user;
+      console.log('tgUser:', tgUser);
+
+      if (tgUser) {
+        // Установка аватара
+        const avatarElement = document.getElementById('userAvatar');
+        if (tgUser.photo_url) {
+          avatarElement.src = tgUser.photo_url;
+        } else {
+          console.warn('Нет аватара пользователя');
+        }
+
+        // Отображение никнейма
+        const nicknameElement = document.getElementById('userNickname');
+        if (tgUser.username) {
+          nicknameElement.textContent = '@' + tgUser.username;
+        } else {
+          nicknameElement.textContent = 'Никнейм не найден';
+        }
+
+        // Сохранение профиля в localStorage (если его ещё нет)
+        const storedProfile = localStorage.getItem('dextax_profile');
+        if (!storedProfile) {
+          const newProfile = {
+            id: tgUser.id,
+            role: '',
+            username: tgUser.username,
+            first_name: tgUser.first_name,
+            last_name: tgUser.last_name
+          };
+          localStorage.setItem('dextax_profile', JSON.stringify(newProfile));
+        }
+
+        isProfileInitialized = true;
+      } else {
+        console.error('Ошибка получения данных пользователя Telegram');
+      }
+    }
+
+    /* 
+      Инициализация карты Leaflet
+      Используется стандартный тайловый слой OpenStreetMap, на котором отображаются улицы и номера зданий.
+    */
+    const map = L.map('map', { zoomControl: false }).setView([55.7558, 37.6173], 15);
+
+    // Добавляем OpenStreetMap-тайлы с атрибуцией "OpenStreetMap"
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: 'OpenStreetMap',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Обработчики для кастомных зум-кнопок
+    document.getElementById('zoomIn').addEventListener('click', () => {
+      map.zoomIn();
+    });
+    document.getElementById('zoomOut').addEventListener('click', () => {
+      map.zoomOut();
+    });
+
+    // Маркер для отображения текущей позиции пользователя
+    let marker;
+
+    /* 
+      Функция startTracking
+      Запускает отслеживание геолокации пользователя, обновляет маркер на карте,
+      центрирует карту и отправляет данные на сервер.
+    */
+    function startTracking() {
+      if (!navigator.geolocation) {
+        alert("Геолокация не поддерживается вашим браузером.");
+        return;
+      }
+
+      navigator.geolocation.watchPosition(
+        (position) => {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          console.log(`Обновлена геолокация: ${latitude}, ${longitude}`);
+
+          // Обновляем или создаём маркер
+          if (marker) {
+            marker.setLatLng([latitude, longitude]);
+          } else {
+            marker = L.marker([latitude, longitude]).addTo(map)
+              .bindPopup("Вы здесь!")
+              .openPopup();
+          }
+
+          // Центрируем карту на текущей позиции
+          map.setView([latitude, longitude], 17);
+
+          // Отправляем геолокацию на сервер
+          sendLocationToServer(latitude, longitude);
+        },
+        (error) => {
+          console.error("Ошибка при получении геолокации:", error);
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 5000
+        }
+      );
+    }
+
+    /* 
+      Функция sendLocationToServer
+      Отправляет текущие координаты пользователя на сервер.
+    */
+    function sendLocationToServer(latitude, longitude) {
+      const userId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id || "unknown";
+
+      fetch("https://4b6b05e9-ac66-4c2b-954b-3785766787d0-00-3q413e29usynt.riker.replit.dev/api/location", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          telegram_id: userId,
+          latitude,
+          longitude
+        })
+      })
+      .then(response => response.json())
+      .then(data => console.log("Геолокация отправлена:", data))
+      .catch(error => console.error("Ошибка при отправке данных:", error));
+    }
+
+    // Запуск отслеживания геолокации
+    startTracking();
+
+    // Инициализация профиля пользователя
+    initUserProfile();
+  </script>
+</body>
+</html>

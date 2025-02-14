@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Пассажирская часть приложения</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+        <script src="https://web.telegram.org/js/telegram-web-app.js"></script>
+        <style>
+            #map { width: 100%; height: 90vh; }
+            #locationButton { margin-top: 20px; padding: 10px 20px; font-size: 18px; cursor: pointer; }
+        </style>
+    </head>
+    <body>
+        <div id="map"></div>
+        <button id="locationButton" onclick="getTelegramLocation()">Определить моё местоположение</button>
+
+        <script>
+            const map = L.map('map', {
+                center: [55.7558, 37.6173],
+                zoom: 5,
+                maxBounds: [[41.1855, 19.0775], [81.8656, 169.0401]],
+                maxZoom: 16,
+            });
+
+            // Слой OpenStreetMap с русской локализацией
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19,
+                bounds: [[35.5, 19.5], [82.5, 180.0]]
+            }).addTo(map);
+
+            let userMarker = null;
+
+            function updateUserLocation(lat, lng) {
+                console.log(`Обновление: ${lat}, ${lng}`);
+                if (userMarker) {
+                    userMarker.setLatLng([lat, lng]);
+                } else {
+                    userMarker = L.marker([lat, lng])
+                        .addTo(map)
+                        .bindPopup("Ваше местоположение")
+                        .openPopup();
+                }
+                map.setView([lat, lng], 13);
+            }
+
+            function getTelegramLocation() {
+                if (Telegram.WebApp.initDataUnsafe?.location) {
+                    const { latitude: lat, longitude: lng } = Telegram.WebApp.initDataUnsafe.location;
+                    updateUserLocation(lat, lng);
+                } else {
+                    Telegram.WebApp.showAlert("Включите геолокацию в настройках Telegram!");
+                }
+            }
+
+            setInterval(getTelegramLocation, 5000);
+            Telegram.WebApp.MainButton.onClick(getTelegramLocation);
+            getTelegramLocation();
+        </script>
+    </body>
+</html>
